@@ -5,7 +5,14 @@ let pdfjsLib = null;
 async function getPdfjs() {
   if (pdfjsLib) return pdfjsLib;
   const pdfjs = await import('pdfjs-dist');
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+  
+  // Dùng local worker thay vì CDN
+  const workerUrl = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url
+  ).toString();
+  
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   pdfjsLib = pdfjs;
   return pdfjs;
 }
