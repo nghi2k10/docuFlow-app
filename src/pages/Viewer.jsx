@@ -10,6 +10,7 @@ import ExcelViewer from '@/components/viewers/ExcelViewer';
 import PptxViewer from '@/components/viewers/PptxViewer';
 import SearchBar from '@/components/viewers/SearchBar';
 import AnnotationPanel, { HIGHLIGHT_COLORS } from '@/components/viewers/AnnotationPanel';
+import { getFileFromCache } from '@/lib/fileCache';
 
 export default function Viewer() {
   const navigate = useNavigate();
@@ -23,17 +24,25 @@ export default function Viewer() {
   // Load file from sessionStorage / window bridge
   useEffect(() => {
     const storedInfo = sessionStorage.getItem('docreader_current_file');
-    if (storedInfo) {
-      const info = JSON.parse(storedInfo);
-      setFileInfo(info);
-    }
-    // The File object is passed via the window bridge (set in Home before navigation)
+    if (!storedInfo) { navigate('/'); return; }
+
+    const info = JSON.parse(storedInfo);
+    setFileInfo(info);
+
     if (window.__docreader_file) {
+      // File vẫn còn trong memory (mở bình thường)
       setFile(window.__docreader_file);
-      // Don't clear — allow re-opening via back/forward
     } else {
-      // No file — go back home
-      navigate('/');
+      // App bị kill rồi mở lại — lấy từ IndexedDB
+      getFileFromCache(info.fingerprint).then(cached => {
+        if (cached) {
+          window.__docreader_file = cached;
+          setFile(cached);
+        } else {
+          // Không còn cache — về Home
+          navigate('/');
+        }
+      });
     }
   }, [navigate]);
 

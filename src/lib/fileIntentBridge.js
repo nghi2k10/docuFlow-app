@@ -1,10 +1,7 @@
 import { getFileType, fileFingerprint } from '@/lib/fileTypes';
 import { addRecentFile } from '@/lib/storage';
+import { saveFileToCache } from '@/lib/fileCache';
 
-/**
- * Gọi hàm này một lần trong App.jsx (useEffect)
- * Truyền vào navigate để điều hướng sang Viewer
- */
 export function initFileIntentBridge(navigate) {
   const handleIntentFile = (event) => {
     const { name, mimeType, base64, size } = event.detail;
@@ -13,7 +10,6 @@ export function initFileIntentBridge(navigate) {
 
   window.addEventListener('docreader:intent-file', handleIntentFile);
 
-  // Nếu app đã load xong nhưng intent đến trước (race condition)
   if (window.__pendingIntentFile) {
     openFileFromIntent(window.__pendingIntentFile, navigate);
     window.__pendingIntentFile = null;
@@ -24,9 +20,8 @@ export function initFileIntentBridge(navigate) {
   };
 }
 
-function openFileFromIntent({ name, mimeType, base64, size }, navigate) {
+async function openFileFromIntent({ name, mimeType, base64, size }, navigate) {
   try {
-    // Convert Base64 → Uint8Array → Blob → File
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
@@ -48,6 +43,7 @@ function openFileFromIntent({ name, mimeType, base64, size }, navigate) {
       openedAt: Date.now(),
     };
 
+    await saveFileToCache(fileInfo.fingerprint, file); // sau khi fileInfo đã có
     addRecentFile(fileInfo);
     sessionStorage.setItem('docreader_current_file', JSON.stringify(fileInfo));
     window.__docreader_file = file;

@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { getRecentFiles, removeRecentFile, addRecentFile, getAnnotations } from '@/lib/storage';
 import FilePicker from '@/components/FilePicker';
 import FileIcon from '@/components/FileIcon';
+import { saveFileToCache } from '@/lib/fileCache';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ export default function Home() {
     setRecentFiles(getRecentFiles());
   }, []);
 
-  const handleFileSelect = useCallback((file) => {
+  const handleFileSelect = useCallback(async (file) => {
     const type = getFileType(file.name);
     if (type.key === 'unknown') {
       toast.error('Định dạng file không được hỗ trợ');
@@ -30,7 +31,9 @@ export default function Home() {
       typeLabel: type.label,
       openedAt: Date.now(),
     };
+
     addRecentFile(fileInfo);
+    await saveFileToCache(fileInfo.fingerprint, file); // <-- lưu binary
     sessionStorage.setItem('docreader_current_file', JSON.stringify(fileInfo));
     window.__docreader_file = file;
     navigate('/viewer');
