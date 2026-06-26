@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Clock, Trash2, FileX, BookOpen, Shield } from 'lucide-react';
+import { Clock, Trash2, FileX, BookOpen, Shield, CheckCircle2 } from 'lucide-react';
 import { getFileType, formatFileSize, formatDate, fileFingerprint } from '@/lib/fileTypes';
 import { toast } from 'react-hot-toast';
-import { getRecentFiles, removeRecentFile, addRecentFile } from '@/lib/storage';
+import { getRecentFiles, removeRecentFile, addRecentFile, getAnnotations } from '@/lib/storage';
 import FilePicker from '@/components/FilePicker';
 import FileIcon from '@/components/FileIcon';
 
@@ -31,10 +31,7 @@ export default function Home() {
       openedAt: Date.now(),
     };
     addRecentFile(fileInfo);
-    // Pass the file via sessionStorage (File objects can't go in URL)
     sessionStorage.setItem('docreader_current_file', JSON.stringify(fileInfo));
-    // Store the actual File object in a module-level variable won't survive navigation,
-    // so we store via a custom event bridge
     window.__docreader_file = file;
     navigate('/viewer');
   }, [navigate]);
@@ -44,9 +41,15 @@ export default function Home() {
     setRecentFiles(getRecentFiles());
   };
 
+  const inProgress = recentFiles.filter(
+    f => f.numPages > 0 && f.currentPage < f.numPages
+  );
+  const rest = recentFiles.filter(
+    f => !(f.numPages > 0 && f.currentPage < f.numPages)
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      {/* Header */}
       <header className="bg-white border-b border-slate-200 px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
@@ -60,9 +63,7 @@ export default function Home() {
         <FilePicker onFileSelect={handleFileSelect} />
       </header>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto px-4 py-6">
-        {/* Hero / Upload area */}
         <div className="mb-8">
           <FilePicker onFileSelect={handleFileSelect} large />
           <div className="flex items-center justify-center gap-4 mt-4 flex-wrap">
@@ -80,17 +81,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Recent files */}
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock size={18} className="text-muted-foreground" />
-            <h2 className="font-semibold text-foreground">Mở gần đây</h2>
-          </div>
-          {recentFiles.length > 0 && (
-            <span className="text-xs text-muted-foreground">{recentFiles.length} file</span>
-          )}
-        </div>
-
         {recentFiles.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
@@ -100,22 +90,47 @@ export default function Home() {
             <p className="text-sm text-muted-foreground/70 mt-1">Mở tài liệu để bắt đầu đọc</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {recentFiles.map((file) => (
-              <RecentFileCard
-                key={file.fingerprint}
-                file={file}
-                onOpen={() => {
-                  sessionStorage.setItem('docreader_current_file', JSON.stringify(file));
-                  navigate('/viewer');
-                }}
-                onRemove={() => handleRemoveRecent(file.fingerprint)}
-              />
-            ))}
-          </div>
+          <>
+            {inProgress.length > 0 && (
+              <>
+                <SectionHeader icon={<Clock size={16} />} label="Đang đọc" count={inProgress.length} />
+                <div className="space-y-2 mb-6">
+                  {inProgress.map(file => (
+                    <RecentFileCard
+                      key={file.fingerprint}
+                      file={file}
+                      onOpen={() => {
+                        sessionStorage.setItem('docreader_current_file', JSON.stringify(file));
+                        navigate('/viewer');
+                      }}
+                      onRemove={() => handleRemoveRecent(file.fingerprint)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
+            {rest.length > 0 && (
+              <>
+                <SectionHeader icon={<Clock size={16} />} label="Mở gần đây" count={rest.length} />
+                <div className="space-y-2">
+                  {rest.map(file => (
+                    <RecentFileCard
+                      key={file.fingerprint}
+                      file={file}
+                      onOpen={() => {
+                        sessionStorage.setItem('docreader_current_file', JSON.stringify(file));
+                        navigate('/viewer');
+                      }}
+                      onRemove={() => handleRemoveRecent(file.fingerprint)}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
 
-        {/* Privacy note */}
         <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground/70 justify-center">
           <Shield size={14} />
           <span>Tài liệu xử lý trên thiết bị, không tải lên máy chủ</span>
@@ -125,28 +140,80 @@ export default function Home() {
   );
 }
 
+function SectionHeader({ icon, label, count }) {
+  return (
+    <div className="mb-3 flex items-center justify-between">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        {icon}
+        <h2 className="font-semibold text-foreground">{label}</h2>
+      </div>
+      <span className="text-xs text-muted-foreground">{count} file</span>
+    </div>
+  );
+}
+
 function RecentFileCard({ file, onOpen, onRemove }) {
+  const annotationCount = getAnnotations(file.fingerprint).length;
+  const hasPdfProgress = file.numPages > 0;
+  const progress = hasPdfProgress
+    ? Math.round((file.currentPage / file.numPages) * 100)
+    : null;
+  const isDone = hasPdfProgress && file.currentPage >= file.numPages;
+
   return (
     <div
-      className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
+      className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200 hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
       onClick={onOpen}
     >
       <FileIcon filename={file.name} size={44} />
+
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-foreground truncate">{file.name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-medium text-foreground truncate">{file.name}</p>
+          <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0 mt-0.5">
+            {formatDate(file.openedAt)}
+          </span>
+        </div>
+
         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
           <span className="font-medium" style={{ color: getFileType(file.name).color }}>
             {file.typeLabel || getFileType(file.name).label}
           </span>
           <span>•</span>
           <span>{formatFileSize(file.size)}</span>
-          <span>•</span>
-          <span>{formatDate(file.openedAt)}</span>
+          {annotationCount > 0 && (
+            <>
+              <span>•</span>
+              <span className="text-amber-600 font-medium">{annotationCount} highlight</span>
+            </>
+          )}
         </div>
+
+        {hasPdfProgress && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${isDone ? 'bg-green-500' : 'bg-primary'}`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            {isDone ? (
+              <div className="flex items-center gap-1 text-green-600">
+                <CheckCircle2 size={12} />
+                <span className="text-xs font-medium">Xong</span>
+              </div>
+            ) : (
+              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+                {file.currentPage}/{file.numPages} tr
+              </span>
+            )}
+          </div>
+        )}
       </div>
+
       <button
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="w-9 h-9 rounded-lg hover:bg-destructive/10 hover:text-destructive flex items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+        className="w-9 h-9 rounded-lg hover:bg-destructive/10 hover:text-destructive flex items-center justify-center text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5"
       >
         <Trash2 size={16} />
       </button>

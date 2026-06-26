@@ -26,6 +26,20 @@ export function addRecentFile(fileInfo) {
   }
 }
 
+export function updateReadingProgress(fingerprint, currentPage, numPages) {
+  try {
+    const files = getRecentFiles();
+    const updated = files.map(f =>
+      f.fingerprint === fingerprint
+        ? { ...f, currentPage, numPages, lastReadAt: Date.now() }
+        : f
+    );
+    localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
+  } catch {
+    // ignore
+  }
+}
+
 export function removeRecentFile(fingerprint) {
   try {
     const files = getRecentFiles().filter(f => f.fingerprint !== fingerprint);

@@ -99,7 +99,15 @@ export default function Viewer() {
     const commonProps = { searchText };
     switch (fileType.key) {
       case 'pdf':
-        return <PdfViewer file={file} {...commonProps} annotations={annotations} />;
+        return (
+          <PdfViewer
+            file={file}
+            fingerprint={fileInfo?.fingerprint}
+            initialPage={fileInfo?.currentPage || 1}
+            {...commonProps}
+            annotations={annotations}
+          />
+      );  
       case 'word':
         return <WordViewer file={file} {...commonProps} />;
       case 'excel':

@@ -1,33 +1,34 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { updateReadingProgress } from '@/lib/storage';
 
 let pdfjsLib = null;
 
 async function getPdfjs() {
   if (pdfjsLib) return pdfjsLib;
   const pdfjs = await import('pdfjs-dist');
-  
-  // Dùng local worker thay vì CDN
   const workerUrl = new URL(
     'pdfjs-dist/build/pdf.worker.min.mjs',
     import.meta.url
   ).toString();
-  
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   pdfjsLib = pdfjs;
   return pdfjs;
 }
 
-export default function PdfViewer({ file, searchText }) {
+export default function PdfViewer({ file, searchText, fingerprint, initialPage = 1 }) {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [numPages, setNumPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(1.0);
+  const [isRestoring, setIsRestoring] = useState(initialPage > 1); // overlay chờ restore
   const canvasRefs = useRef({});
   const containerRef = useRef(null);
   const pdfDocRef = useRef(null);
   const renderingRef = useRef(false);
+  const saveTimerRef = useRef(null);
+  const hasRestoredRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +36,8 @@ export default function PdfViewer({ file, searchText }) {
     setError(null);
     setPages([]);
     pdfDocRef.current = null;
+    hasRestoredRef.current = false;
+    setIsRestoring(initialPage > 1);
 
     const load = async () => {
       try {
@@ -48,7 +51,6 @@ export default function PdfViewer({ file, searchText }) {
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
-        console.error('PDF load error:', err);
         setError('Không thể mở file PDF. ' + err.message);
         setLoading(false);
       }
@@ -57,11 +59,39 @@ export default function PdfViewer({ file, searchText }) {
     return () => { cancelled = true; };
   }, [file]);
 
-  // Render all pages whenever pages list or scale changes
   useEffect(() => {
     if (!pdfDocRef.current || pages.length === 0) return;
-    renderAllPages();
+
+    const render = async () => {
+      await renderAllPages();
+
+      if (!hasRestoredRef.current && initialPage > 1) {
+        hasRestoredRef.current = true;
+        requestAnimationFrame(() => {
+          const target = containerRef.current?.querySelector(
+            `[data-page="${initialPage}"]`
+          );
+          if (target) {
+            target.scrollIntoView({ behavior: 'instant', block: 'start' });
+          }
+          setIsRestoring(false); // tắt overlay sau khi scroll xong
+        });
+      } else {
+        setIsRestoring(false);
+      }
+    };
+
+    render();
   }, [pages, scale]);
+
+  useEffect(() => {
+    if (!fingerprint || numPages === 0) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      updateReadingProgress(fingerprint, currentPage, numPages);
+    }, 800);
+    return () => clearTimeout(saveTimerRef.current);
+  }, [currentPage, numPages, fingerprint]);
 
   const renderAllPages = async () => {
     if (renderingRef.current) return;
@@ -95,7 +125,7 @@ export default function PdfViewer({ file, searchText }) {
     renderingRef.current = false;
   };
 
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     if (!containerRef.current) return;
     const scrollTop = containerRef.current.scrollTop;
     const pageEls = containerRef.current.querySelectorAll('[data-page]');
@@ -104,7 +134,7 @@ export default function PdfViewer({ file, searchText }) {
       if (el.offsetTop <= scrollTop + 80) found = parseInt(el.dataset.page);
     });
     setCurrentPage(found);
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -124,7 +154,17 @@ export default function PdfViewer({ file, searchText }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* Overlay giữ màn hình cho đến khi render + scroll về đúng trang */}
+      {isRestoring && (
+        <div className="absolute inset-0 z-10 bg-white flex flex-col items-center justify-center gap-3">
+          <div className="w-10 h-10 border-4 border-slate-200 border-t-primary rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">
+            Đang mở trang {initialPage}...
+          </p>
+        </div>
+      )}
+
       <div
         ref={containerRef}
         onScroll={handleScroll}
@@ -143,7 +183,6 @@ export default function PdfViewer({ file, searchText }) {
         </div>
       </div>
 
-      {/* Bottom bar: page indicator + zoom */}
       <div className="flex items-center justify-center gap-3 py-2 border-t bg-white px-4 min-h-[44px]">
         <button
           onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.2).toFixed(1))))}
