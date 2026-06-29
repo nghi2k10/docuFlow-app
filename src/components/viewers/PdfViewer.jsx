@@ -112,29 +112,26 @@ const PdfPage = React.memo(function PdfPage({ pageNum, pdfDoc, scale, containerW
   }, [scale, renderPage]);
 
   return (
-    <div
-      ref={wrapperRef}
-      data-page={pageNum}
-      className="bg-white shadow-md rounded overflow-hidden flex-shrink-0"
-      style={{ width: pageSize.w, minHeight: pageSize.h }}
-    >
-      {/* Canvas luôn mount, chỉ clear/repaint nội dung */}
-      <canvas ref={canvasRef} />
+  <div
+    ref={wrapperRef}
+    data-page={pageNum}
+    className="relative bg-white shadow-md rounded overflow-hidden flex-shrink-0"
+    style={{ width: pageSize.w, minHeight: pageSize.h }}
+  >
+    <canvas ref={canvasRef} />
 
-      {/* Skeleton khi chưa render */}
-      {!rendered && (
-        <div
-          className="absolute inset-0 bg-white flex items-center justify-center"
-          style={{ width: pageSize.w, height: pageSize.h }}
-        >
-          <div className="flex flex-col items-center gap-2 opacity-30">
-            <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
-            <span className="text-xs text-slate-400">{pageNum}</span>
-          </div>
+    {!rendered && (
+      <div
+        className="absolute inset-0 bg-white flex items-center justify-center"
+      >
+        <div className="flex flex-col items-center gap-2 opacity-30">
+          <div className="w-8 h-8 border-2 border-slate-300 border-t-slate-500 rounded-full animate-spin" />
+          <span className="text-xs text-slate-400">{pageNum}</span>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    )}
+  </div>
+);
 });
 
 // ── Main component ────────────────────────────────────────────────────────────
