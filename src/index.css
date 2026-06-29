@@ -98,3 +98,29 @@
     border-radius: 2px;
   }
 }
+
+
+/* docx-preview overrides — giống Word desktop */
+.docx-wrapper section.docx {
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  margin: 0 auto;
+}
+
+/* Ảnh trong docx */
+.docx-wrapper img {
+  max-width: 100%;
+}
+
+/* Table */
+.docx-wrapper table {
+  border-collapse: collapse;
+}
+
+/* Mobile: scale nhỏ lại để vừa màn hình */
+@media (max-width: 640px) {
+  .docx-wrapper section.docx {
+    transform-origin: top center;
+    width: 100% !important;
+  }
+}

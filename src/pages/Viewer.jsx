@@ -117,10 +117,11 @@ export default function Viewer() {
             annotations={annotations}
           />
       );  
+      // Trong renderViewer():
       case 'word':
-        return <WordViewer file={file} {...commonProps} />;
+        return <WordViewer file={file} searchText={searchText} annotations={annotations} />;
       case 'excel':
-        return <ExcelViewer file={file} {...commonProps} />;
+        return <ExcelViewer file={file} searchText={searchText} annotations={annotations} />;
       case 'powerpoint':
         return <PptxViewer file={file} {...commonProps} />;
       default:
